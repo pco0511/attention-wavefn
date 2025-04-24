@@ -123,3 +123,38 @@ class ResidualMLP(eqx.Module, strict=True):
         else:
             x = y
         return x
+
+    
+class PeriodicEmbedding(eqx.Module):
+    linear: eqx.nn.Linear
+    recip_latt_vecs: Float[Array, "dim dim"] = eqx.field(static=True)
+    space_dim: int = eqx.field(static=True)
+    embedding_dim: int = eqx.field(static=True)
+    
+    def __init__(
+        self,
+        recip_latt_vecs: Float[Array, "dim dim"],
+        embedding_dim: int,
+        *,
+        key: PRNGKeyArray,
+    ):
+        self.recip_latt_vecs = recip_latt_vecs
+        self.space_dim = recip_latt_vecs.shape[0]
+        self.embedding_dim = embedding_dim
+        self.linear = eqx.nn.Linear(
+            2 * self.space_dim,
+            self.embedding_dim,
+            use_bias=False,
+            key=key
+        )
+    
+    def __call__(
+        self, x: Float[Array, "dim"]
+    ) -> Float[Array, "e_dim"]:
+        phi = jnp.einsum("j,ij->i", x, self.recip_latt_vecs)
+        sines = jnp.sin(phi)
+        cosines = jnp.cos(phi)
+        features = jnp.concat([sines, cosines])
+        embedded = self.linear(features)
+        return embedded
+        
