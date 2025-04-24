@@ -6,9 +6,10 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Float, Complex, Array, PRNGKeyArray
 
-from nn import ResidualMLP
+from nn import PeriodicEmbedding, ResidualMLP
 
 class SlaterNet(eqx.Module):
+    periodic_embedding: PeriodicEmbedding
     mlp: ResidualMLP
     activation: Callable
     recip_latt_vecs: Float[Array, "dim dim"] = eqx.field(static=True)
@@ -34,6 +35,13 @@ class SlaterNet(eqx.Module):
         self.hidden_dim = hidden_dim
         self.mlp_depth = mlp_depth
         
+        emb_key, mlp_key = jax.random.split(key, 2)
+        
+        self.periodic_embedding = PeriodicEmbedding(
+            self.recip_latt_vecs, self.hidden_dim,
+            key=emb_key
+        )
+        
         self.mlp = ResidualMLP(
             2 * self.space_dim, 
             2 * num_particle,
@@ -41,19 +49,16 @@ class SlaterNet(eqx.Module):
             self.mlp_depth, 
             self.mlp_activation,
             use_final_bias=False,
-            key=key
+            key=mlp_key
         )
             
     def __call__(
         self, x: Float[Array, "n_par dim"]
     ) -> Complex:
-        y = jnp.einsum("ik,jk->ij", x, self.recip_latt_vecs) # shape=(n_particle, space_dim)
-        sines = jnp.sin(y)                                   # shape=(n_particle, space_dim)
-        cosines = jnp.cos(y)                                 # shape=(n_particle, space_dim)
-        features = jnp.concat([sines, cosines], axis=1)      # shape=(n_particle, 2 * space_dim)
-        mlp_outputs = jax.vmap(self.mlp)(features)           # shape=(n_particle, 2 * n_particle)
-        real, imag = jnp.split(mlp_outputs, 2, axis=1)
-        single_wave_fns = jax.lax.complex(real, imag)        # shape=(n_particle, n_particle), dtype=complex
+        embedded = jax.vmap(self.periodic_embedding)(x) # shape=(n_particle, hidden_dim)
+        mlp_outs = jax.vmap(self.mlp)(embedded)         # shape=(n_particle, 2 * n_particle)
+        real, imag = jnp.split(mlp_outs, 2, axis=1)
+        single_wave_fns = jax.lax.complex(real, imag)   # shape=(n_particle, n_particle), dtype=complex
         return jnp.linalg.det(single_wave_fns)
         
         

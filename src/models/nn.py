@@ -154,7 +154,6 @@ class PeriodicEmbedding(eqx.Module):
         phi = jnp.einsum("j,ij->i", x, self.recip_latt_vecs)
         sines = jnp.sin(phi)
         cosines = jnp.cos(phi)
-        features = jnp.concat([sines, cosines])
-        embedded = self.linear(features)
+        embedded = self.linear(jnp.concat([sines, cosines]))
         return embedded
         
