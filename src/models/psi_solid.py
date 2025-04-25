@@ -84,7 +84,8 @@ class PsiSolid(eqx.Module):
     attention_blocks: list[AttentionBlock]
     activation: Callable
     projector: ProjectorBlock
-    recip_latt_vecs: Float[Array, "dim dim"] = eqx.field(static=True)
+    recip_latt_vecs: Float[Array, "num dim"] = eqx.field(static=True)
+    num_recip_vecs: int = eqx.field(static=True)
     space_dim: int = eqx.field(static=True)
     num_particle: int = eqx.field(static=True)
     hidden_dim: int = eqx.field(static=True)
@@ -95,7 +96,7 @@ class PsiSolid(eqx.Module):
     def __init__(
         self,
         num_particle: int,
-        recip_latt_vecs: Float[Array, "dim dim"],
+        recip_latt_vecs: Float[Array, "num dim"],
         hidden_dim: int,
         num_heads: int,
         num_blocks: int,
@@ -106,7 +107,8 @@ class PsiSolid(eqx.Module):
     ):
         self.activation = activation
         self.recip_latt_vecs = recip_latt_vecs
-        self.space_dim = recip_latt_vecs.shape[0]
+        self.num_recip_vecs = recip_latt_vecs.shape[0]
+        self.space_dim = recip_latt_vecs.shape[1]
         self.num_particle = num_particle
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads

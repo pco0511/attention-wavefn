@@ -12,7 +12,8 @@ class SlaterNet(eqx.Module):
     periodic_embedding: PeriodicEmbedding
     mlp: ResidualMLP
     activation: Callable
-    recip_latt_vecs: Float[Array, "dim dim"] = eqx.field(static=True)
+    recip_latt_vecs: Float[Array, "num dim"] = eqx.field(static=True)
+    num_recip_vecs: int = eqx.field(static=True)
     space_dim: int = eqx.field(static=True)
     num_particle: int = eqx.field(static=True)
     hidden_dim: int = eqx.field(static=True)
@@ -21,7 +22,7 @@ class SlaterNet(eqx.Module):
     def __init__(
         self,
         num_particle: int,
-        recip_latt_vecs: Float[Array, "dim dim"],
+        recip_latt_vecs: Float[Array, "num dim"],
         hidden_dim: int,
         mlp_depth: int,
         mlp_activation: Callable=jax.nn.tanh,
@@ -30,7 +31,8 @@ class SlaterNet(eqx.Module):
     ):
         self.mlp_activation = mlp_activation
         self.recip_latt_vecs = recip_latt_vecs
-        self.space_dim = recip_latt_vecs.shape[0]
+        self.num_recip_vecs = recip_latt_vecs.shape[0]
+        self.space_dim = recip_latt_vecs.shape[1]
         self.num_particle = num_particle
         self.hidden_dim = hidden_dim
         self.mlp_depth = mlp_depth
@@ -43,7 +45,7 @@ class SlaterNet(eqx.Module):
         )
         
         self.mlp = ResidualMLP(
-            2 * self.space_dim, 
+            self.hidden_dim, 
             2 * num_particle,
             self.hidden_dim, 
             self.mlp_depth, 

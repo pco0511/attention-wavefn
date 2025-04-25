@@ -127,22 +127,24 @@ class ResidualMLP(eqx.Module, strict=True):
     
 class PeriodicEmbedding(eqx.Module):
     linear: eqx.nn.Linear
-    recip_latt_vecs: Float[Array, "dim dim"] = eqx.field(static=True)
+    recip_latt_vecs: Float[Array, "num dim"] = eqx.field(static=True)
+    num_recip_vecs: int = eqx.field(static=True)
     space_dim: int = eqx.field(static=True)
     embedding_dim: int = eqx.field(static=True)
     
     def __init__(
         self,
-        recip_latt_vecs: Float[Array, "dim dim"],
+        recip_latt_vecs: Float[Array, "num dim"],
         embedding_dim: int,
         *,
         key: PRNGKeyArray,
     ):
         self.recip_latt_vecs = recip_latt_vecs
-        self.space_dim = recip_latt_vecs.shape[0]
+        self.num_recip_vecs = recip_latt_vecs.shape[0]
+        self.space_dim = recip_latt_vecs.shape[1]
         self.embedding_dim = embedding_dim
         self.linear = eqx.nn.Linear(
-            2 * self.space_dim,
+            2 * self.num_recip_vecs,
             self.embedding_dim,
             use_bias=False,
             key=key
