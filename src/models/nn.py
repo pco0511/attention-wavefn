@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from typing import Callable
 from typing import Any, Literal
 
 import jax
@@ -92,10 +92,10 @@ class ResidualMLP(eqx.Module, strict=True):
         
     def __call__(
         self, 
-        x: Array, 
+        x: Float[Array, "indim"], 
         *,
         key: PRNGKeyArray | None = None
-    ):
+    ) -> Float[Array, "outdim"]:
         for i, layer in enumerate(self.layers[:-1]):
             y = layer(x)
             layer_activation = jax.tree_util.tree_map(

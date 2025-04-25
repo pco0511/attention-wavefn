@@ -1,5 +1,4 @@
-from collections.abc import Callable
-from typing import Literal
+from typing import Callable
 
 import equinox as eqx
 import jax 
@@ -56,7 +55,7 @@ class SlaterNet(eqx.Module):
             
     def __call__(
         self, x: Float[Array, "n_par dim"]
-    ) -> Complex:
+    ) -> Complex[Array, ""]:
         embedded = jax.vmap(self.periodic_embedding)(x) # shape=(n_particle, hidden_dim)
         mlp_outs = jax.vmap(self.mlp)(embedded)         # shape=(n_particle, 2 * n_particle)
         real, imag = jnp.split(mlp_outs, 2, axis=1)

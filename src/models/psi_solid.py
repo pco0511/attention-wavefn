@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from typing import Callable
 
 import equinox as eqx
 import jax 
@@ -141,7 +141,7 @@ class PsiSolid(eqx.Module):
     
     def __call__(
         self, x: Float[Array, "n_particle dim"]
-    ) -> Complex:
+    ) -> Complex[Array, ""]:
         z = jax.vmap(self.periodic_embedding)(x)         # shape=(n_particle, hidden_dim)
         
         for attention_block in self.attention_blocks:
