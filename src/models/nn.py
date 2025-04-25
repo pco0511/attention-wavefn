@@ -1,6 +1,8 @@
 from typing import Callable
 from typing import Any, Literal
 
+import numpy as np
+
 import jax
 import jax.numpy as jnp
 import equinox as eqx
@@ -127,14 +129,14 @@ class ResidualMLP(eqx.Module, strict=True):
     
 class PeriodicEmbedding(eqx.Module):
     linear: eqx.nn.Linear
-    recip_latt_vecs: Float[Array, "num dim"] = eqx.field(static=True)
+    recip_latt_vecs: np.ndarray = eqx.field(static=True)
     num_recip_vecs: int = eqx.field(static=True)
     space_dim: int = eqx.field(static=True)
     embedding_dim: int = eqx.field(static=True)
     
     def __init__(
         self,
-        recip_latt_vecs: Float[Array, "num dim"],
+        recip_latt_vecs: np.ndarray,
         embedding_dim: int,
         *,
         key: PRNGKeyArray,

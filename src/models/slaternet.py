@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Float, Complex, Array, PRNGKeyArray
 
-from nn import PeriodicEmbedding, ResidualMLP
+from .nn import PeriodicEmbedding, ResidualMLP
 
 class SlaterNet(eqx.Module):
     periodic_embedding: PeriodicEmbedding
@@ -28,7 +28,7 @@ class SlaterNet(eqx.Module):
         *,
         key: PRNGKeyArray
     ):
-        self.mlp_activation = mlp_activation
+        self.activation = mlp_activation
         self.recip_latt_vecs = recip_latt_vecs
         self.num_recip_vecs = recip_latt_vecs.shape[0]
         self.space_dim = recip_latt_vecs.shape[1]
@@ -48,7 +48,7 @@ class SlaterNet(eqx.Module):
             2 * num_particle,
             self.hidden_dim, 
             self.mlp_depth, 
-            self.mlp_activation,
+            self.activation,
             use_final_bias=False,
             key=mlp_key
         )

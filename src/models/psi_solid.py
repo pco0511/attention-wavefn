@@ -5,26 +5,27 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Float, Complex, Array, PRNGKeyArray
 
-from nn import PeriodicEmbedding
+from .nn import PeriodicEmbedding
 
 class AttentionBlock(eqx.Module):
     attention: eqx.nn.MultiheadAttention
-    num_heads: int = eqx.field(static=True)
+    activation: Callable
     ff_layer: eqx.nn.Linear
     
     def __init__(
         self,
         hidden_dim: int,
+        attention_dim: int,
         num_heads: int,
         activation: Callable=jax.nn.tanh,
         *,
         key: PRNGKeyArray
     ):
-        embedder_key, attention_key, ff_key = jax.random.split(key, 2)
-        self.num_heads = num_heads
+        attention_key, ff_key = jax.random.split(key, 2)
         self.attention = eqx.nn.MultiheadAttention(
             num_heads=num_heads,
             query_size=hidden_dim,
+            qk_size=attention_dim,
             use_query_bias=True,
             use_key_bias=True,
             use_value_bias=True,
@@ -36,11 +37,11 @@ class AttentionBlock(eqx.Module):
     
     def __call__(
         self,
-        inputs: Float[Array, "n_par, h_dim"]
-    ) -> Float[Array, "n_par, h_dim"]:
+        inputs: Float[Array, "n_par h_dim"]
+    ) -> Float[Array, "n_par h_dim"]:
         attention_output = self.attention(
             query=inputs,
-            key=inputs,
+            key_=inputs,
             value=inputs
         )
         ff_input = attention_output + inputs
@@ -49,9 +50,8 @@ class AttentionBlock(eqx.Module):
     
 class ProjectorBlock(eqx.Module):
     linear: eqx.nn.Linear
-    hidden_dim: int = eqx.field(statis=True)
-    num_particle: int = eqx.field(statis=True)
-    num_det: int = eqx.field(statis=True)
+    num_particle: int = eqx.field(static=True)
+    num_det: int = eqx.field(static=True)
     
     def __init__(
         self,
@@ -61,7 +61,6 @@ class ProjectorBlock(eqx.Module):
         *,
         key: PRNGKeyArray
     ):
-        self.hidden_dim = hidden_dim
         self.num_particle = num_particle
         self.num_det = num_det
         self.linear = eqx.nn.Linear(
@@ -89,6 +88,7 @@ class PsiSolid(eqx.Module):
     space_dim: int = eqx.field(static=True)
     num_particle: int = eqx.field(static=True)
     hidden_dim: int = eqx.field(static=True)
+    attention_dim: int = eqx.field(static=True)
     num_heads: int = eqx.field(static=True)
     num_blocks: int = eqx.field(static=True)
     num_det: int = eqx.field(static=True)
@@ -98,11 +98,12 @@ class PsiSolid(eqx.Module):
         num_particle: int,
         recip_latt_vecs: Float[Array, "num dim"],
         hidden_dim: int,
+        attention_dim: int,
         num_heads: int,
         num_blocks: int,
         num_det: int,
         activation: Callable=jax.nn.tanh,
-        *
+        *,
         key: PRNGKeyArray
     ):
         self.activation = activation
@@ -111,6 +112,7 @@ class PsiSolid(eqx.Module):
         self.space_dim = recip_latt_vecs.shape[1]
         self.num_particle = num_particle
         self.hidden_dim = hidden_dim
+        self.attention_dim = attention_dim
         self.num_heads = num_heads
         self.num_blocks = num_blocks
         self.num_det = num_det
@@ -126,13 +128,14 @@ class PsiSolid(eqx.Module):
         self.attention_blocks = [
             AttentionBlock(
                 self.hidden_dim,
+                self.attention_dim,
                 self.num_heads,
                 self.activation,
                 key=subkey
             ) for subkey in attention_block_keys
         ]
         
-        self.projectors = ProjectorBlock(
+        self.projector = ProjectorBlock(
             self.hidden_dim,
             self.num_particle,
             self.num_det,
