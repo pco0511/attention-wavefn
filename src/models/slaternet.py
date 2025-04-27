@@ -11,7 +11,6 @@ class SlaterNet(eqx.Module):
     periodic_embedding: PeriodicEmbedding
     mlp: ResidualMLP
     activation: Callable
-    recip_latt_vecs: Float[Array, "num dim"] = eqx.field(static=True)
     num_recip_vecs: int = eqx.field(static=True)
     space_dim: int = eqx.field(static=True)
     num_particle: int = eqx.field(static=True)
@@ -29,7 +28,6 @@ class SlaterNet(eqx.Module):
         key: PRNGKeyArray
     ):
         self.activation = mlp_activation
-        self.recip_latt_vecs = recip_latt_vecs
         self.num_recip_vecs = recip_latt_vecs.shape[0]
         self.space_dim = recip_latt_vecs.shape[1]
         self.num_particle = num_particle
@@ -39,7 +37,7 @@ class SlaterNet(eqx.Module):
         emb_key, mlp_key = jax.random.split(key, 2)
         
         self.periodic_embedding = PeriodicEmbedding(
-            self.recip_latt_vecs, self.hidden_dim,
+            recip_latt_vecs, self.hidden_dim,
             key=emb_key
         )
         
@@ -62,4 +60,6 @@ class SlaterNet(eqx.Module):
         single_wave_fns = jax.lax.complex(real, imag)   # shape=(n_particle, n_particle), dtype=complex
         return jnp.linalg.det(single_wave_fns)
         
-        
+    @property
+    def recip_latt_vecs(self):
+        return jnp.array(self.periodic_embedding.recip_latt_vecs)

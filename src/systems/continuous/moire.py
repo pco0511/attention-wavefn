@@ -1,7 +1,6 @@
-from typing import Callable
-
 import jax
 import jax.numpy as jnp
+import equinox as eqx
 from jaxtyping import Float, Complex, Array
 
 G = jnp.array([
@@ -10,9 +9,9 @@ G = jnp.array([
     [jnp.cos(2 * jnp.pi * 2 / 3), jnp.sin(2 * jnp.pi * 2 / 3)],
 ])
 
-def moire_potential(
+def potential(
     x: Float[Array, "2"], 
-    V0: float,
+    V_0: float,
     a_M: float,
     phi: float
 ) -> Float[Array, ""]:
@@ -26,4 +25,56 @@ def moire_potential(
     cos1 = jnp.cos(jnp.dot(g1, x) + phi)
     cos2 = jnp.cos(jnp.dot(g2, x) + phi)
     
-    return -2 * V0 * (cos0 + cos1 + cos2)
+    return -2 * V_0 * (cos0 + cos1 + cos2)
+
+def coulomb_repulsive(
+    x: Float[Array, "2"],
+    y: Float[Array, "2"],
+    epsilon: float = 1e-6
+) -> Float[Array, ""]:
+    return 1 / (jnp.linalg.norm(x - y) + epsilon)
+
+def wfn_laplacian(
+    wavefn: eqx.Module,
+    point: Float[Array, "n_par 2"]
+) -> Float[Array, ""]:
+    def laplacian(fn_real):
+        grad_fn = jax.grad(fn_real)
+        
+        def hvp(v):
+            _, hv = jax.jvp(grad_fn, (point,), (v,))
+            return hv
+        
+        d = point.size # n_par * spc_dim
+        
+        def body(i, acc):
+            v_flat = jnp.zeros(d, point.dtype).at[i].set(1.)
+            v = v_flat.reshape(point.shape)
+            hv = hvp(v)
+            diag_i = hv.reshape(-1)[i]
+            return acc + diag_i
+        
+        zero = jnp.asarray(0., point.real.dtype)
+        return jax.lax.fori_loop(0, d, body, zero)
+    
+    lap_re = laplacian(lambda r: jnp.real(wavefn(r)))
+    lap_im = laplacian(lambda r: jnp.imag(wavefn(r)))
+
+    return jax.lax.complex(lap_re, lap_im)
+
+def local_energy(
+    wavefn: eqx.Module,
+    point: Float[Array, "n_par 2"],
+    V_0: float,
+    a_M: float,
+    phi: float,
+    epsilon: float = 1e-6
+) -> Float[Array, ""]:
+    v = jnp.sum(jax.vmap(potential, 0, 0)(point, V_0=V_0, a_M=a_M, phi=phi))
+    interactions = jax.vmap(
+        jax.vmap(coulomb_repulsive, in_axes=(None, 0)),
+        in_axes=(0, None)
+    )(point, point, epsilon)
+    u = jnp.sum(jnp.triu(interactions, k=1))
+    t = (-1/2) * wfn_laplacian(wavefn, point) / (wavefn(point) + epsilon)
+    return t + v + u

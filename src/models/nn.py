@@ -129,19 +129,20 @@ class ResidualMLP(eqx.Module, strict=True):
     
 class PeriodicEmbedding(eqx.Module):
     linear: eqx.nn.Linear
-    recip_latt_vecs: np.ndarray = eqx.field(static=True)
+    recip_latt_vecs: tuple[tuple[float, ...], ...] = eqx.field(static=True)
     num_recip_vecs: int = eqx.field(static=True)
     space_dim: int = eqx.field(static=True)
     embedding_dim: int = eqx.field(static=True)
     
     def __init__(
         self,
-        recip_latt_vecs: np.ndarray,
+        recip_latt_vecs: Float[Array, "num dim"],
         embedding_dim: int,
         *,
         key: PRNGKeyArray,
     ):
-        self.recip_latt_vecs = recip_latt_vecs
+        arr = np.asarray(recip_latt_vecs)
+        self.recip_latt_vecs = tuple(map(tuple, arr.tolist()))
         self.num_recip_vecs = recip_latt_vecs.shape[0]
         self.space_dim = recip_latt_vecs.shape[1]
         self.embedding_dim = embedding_dim
@@ -155,7 +156,8 @@ class PeriodicEmbedding(eqx.Module):
     def __call__(
         self, x: Float[Array, "dim"]
     ) -> Float[Array, "e_dim"]:
-        phi = jnp.einsum("j,ij->i", x, self.recip_latt_vecs)
+        rlv_arr = jnp.array(self.recip_latt_vecs)
+        phi = jnp.einsum("j,ij->i", x, rlv_arr)
         sines = jnp.sin(phi)
         cosines = jnp.cos(phi)
         embedded = self.linear(jnp.concat([sines, cosines]))

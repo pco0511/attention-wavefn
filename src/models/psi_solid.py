@@ -83,7 +83,6 @@ class PsiSolid(eqx.Module):
     attention_blocks: list[AttentionBlock]
     activation: Callable
     projector: ProjectorBlock
-    recip_latt_vecs: Float[Array, "num dim"] = eqx.field(static=True)
     num_recip_vecs: int = eqx.field(static=True)
     space_dim: int = eqx.field(static=True)
     num_particle: int = eqx.field(static=True)
@@ -107,7 +106,6 @@ class PsiSolid(eqx.Module):
         key: PRNGKeyArray
     ):
         self.activation = activation
-        self.recip_latt_vecs = recip_latt_vecs
         self.num_recip_vecs = recip_latt_vecs.shape[0]
         self.space_dim = recip_latt_vecs.shape[1]
         self.num_particle = num_particle
@@ -120,7 +118,7 @@ class PsiSolid(eqx.Module):
         emb_key, atten_key, proj_key = jax.random.split(key, 3)
         
         self.periodic_embedding = PeriodicEmbedding(
-            self.recip_latt_vecs, self.hidden_dim,
+            recip_latt_vecs, self.hidden_dim,
             key=emb_key
         )
         
@@ -155,3 +153,6 @@ class PsiSolid(eqx.Module):
         multi_wave_fns = jnp.linalg.det(single_wave_fns) # shape=(n_det, )
         return jnp.sum(multi_wave_fns)
         
+    @property
+    def recip_latt_vecs(self):
+        return jnp.array(self.periodic_embedding.recip_latt_vecs)
