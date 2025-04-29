@@ -82,4 +82,4 @@ def local_energy(
     interactions = pair_energy(idx_i, idx_j)
     u = jnp.sum(interactions)
     t = (-1/2) * wfn_laplacian(wavefn, point) / (wavefn(point) + epsilon)
-    return t + v + u
+    return jnp.real(t + v + u)

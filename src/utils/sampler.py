@@ -58,14 +58,14 @@ def metropolis_hastings(key, x0, num_steps, sigma, indicator_fn, unnorm_fn):
         x, acc_count = carry
         key_prop, key_u = jax.random.split(key)
 
-        x_prop = x + sigma * jax.random.normal(key_prop, x0.shape)
+        x_prop = x + sigma * jax.random.normal(key_prop, x0.shape) # <<<< 밖으로 빼기
 
         alpha = jnp.where(
             indicator_fn(x_prop) > 0,
-            jnp.minimum(1.0, unnorm_fn(x_prop) / unnorm_fn(x)),
+            jnp.minimum(1.0, unnorm_fn(x_prop) / unnorm_fn(x)),  # <<<< 계산된거 넘겨주기
             0.0
         )
-        u = jax.random.uniform(key_u)
+        u = jax.random.uniform(key_u) # <<<< 밖으로 빼기
         accept = u < alpha
 
         x_next = jnp.where(accept, x_prop, x)

@@ -162,7 +162,7 @@ class PsiSolid(eqx.Module):
         self, x: Float[Array, "n_particle dim"]
     ) -> Complex[Array, ""]:
         z = jax.vmap(self.periodic_embedding)(x)         # shape=(n_particle, hidden_dim)
-        for attention_block in self .attention_blocks:
+        for attention_block in self.attention_blocks:
             z = attention_block(z)                       # shape=(n_particle, hidden_dim)
         single_wave_fns = jax.vmap(self.projector)(z)    # shape=(n_particle, n_det, n_particle)
         single_wave_fns = jnp.permute_dims(single_wave_fns, (1, 0, 2)) # shape=(n_det, n_particle, n_particle)
