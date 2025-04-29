@@ -1,3 +1,5 @@
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 import equinox as eqx
@@ -70,11 +72,14 @@ def local_energy(
     phi: float,
     epsilon: float = 1e-6
 ) -> Float[Array, ""]:
-    v = jnp.sum(jax.vmap(potential, 0, 0)(point, V_0=V_0, a_M=a_M, phi=phi))
-    interactions = jax.vmap(
-        jax.vmap(coulomb_repulsive, in_axes=(None, 0)),
-        in_axes=(0, None)
-    )(point, point, epsilon)
-    u = jnp.sum(jnp.triu(interactions, k=1))
+    v = jnp.sum(jax.vmap(potential, (0, None, None, None))(point, V_0, a_M, phi))
+    idx_i, idx_j = jnp.triu_indices(point.shape[0], k=1) 
+    pair_energy = jax.vmap(
+        lambda i, j: coulomb_repulsive(point[i], point[j], epsilon),
+        in_axes=(0, 0),
+        out_axes=0
+    )
+    interactions = pair_energy(idx_i, idx_j)
+    u = jnp.sum(interactions)
     t = (-1/2) * wfn_laplacian(wavefn, point) / (wavefn(point) + epsilon)
     return t + v + u

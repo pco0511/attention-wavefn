@@ -5,18 +5,20 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Float, Complex, Array, PRNGKeyArray
 
-from .nn import PeriodicEmbedding
+from .nn import PeriodicEmbedding, ResidualMLP
 
 class AttentionBlock(eqx.Module):
     attention: eqx.nn.MultiheadAttention
     activation: Callable
-    ff_layer: eqx.nn.Linear
+    ff_layer: ResidualMLP
     
     def __init__(
         self,
         hidden_dim: int,
         attention_dim: int,
         num_heads: int,
+        num_mlp_layers: int,
+        intermediate_dim: int,
         activation: Callable=jax.nn.tanh,
         *,
         key: PRNGKeyArray
@@ -33,8 +35,17 @@ class AttentionBlock(eqx.Module):
             key=attention_key
         )
         self.activation = activation
-        self.ff_layer = eqx.nn.Linear(hidden_dim, hidden_dim, key=ff_key)
-    
+        self.ff_layer = ResidualMLP(
+            hidden_dim,
+            hidden_dim,
+            intermediate_dim,
+            num_mlp_layers,
+            activation,
+            final_activation=activation,
+            use_final_residual=True,
+            key=ff_key
+        )
+        
     def __call__(
         self,
         inputs: Float[Array, "n_par h_dim"]
@@ -45,8 +56,8 @@ class AttentionBlock(eqx.Module):
             value=inputs
         )
         ff_input = attention_output + inputs
-        ff_output = self.activation(jax.vmap(self.ff_layer)(ff_input))
-        return ff_output + ff_input
+        ff_output = jax.vmap(self.ff_layer)(ff_input)
+        return ff_output
     
 class ProjectorBlock(eqx.Module):
     linear: eqx.nn.Linear
@@ -77,7 +88,6 @@ class ProjectorBlock(eqx.Module):
         real, imag = self.linear(input).reshape(2, self.num_det, self.num_particle)
         return jax.lax.complex(real, imag)
     
-    
 class PsiSolid(eqx.Module):
     periodic_embedding: PeriodicEmbedding
     attention_blocks: list[AttentionBlock]
@@ -88,8 +98,10 @@ class PsiSolid(eqx.Module):
     num_particle: int = eqx.field(static=True)
     hidden_dim: int = eqx.field(static=True)
     attention_dim: int = eqx.field(static=True)
+    intermediate_dim: int = eqx.field(static=True)
     num_heads: int = eqx.field(static=True)
     num_blocks: int = eqx.field(static=True)
+    num_mlp_layers: int = eqx.field(static=True)
     num_det: int = eqx.field(static=True)
     
     def __init__(
@@ -97,9 +109,11 @@ class PsiSolid(eqx.Module):
         num_particle: int,
         recip_latt_vecs: Float[Array, "num dim"],
         hidden_dim: int,
+        intermediate_dim: int,
         attention_dim: int,
         num_heads: int,
         num_blocks: int,
+        num_mlp_layers: int,
         num_det: int,
         activation: Callable=jax.nn.tanh,
         *,
@@ -110,9 +124,11 @@ class PsiSolid(eqx.Module):
         self.space_dim = recip_latt_vecs.shape[1]
         self.num_particle = num_particle
         self.hidden_dim = hidden_dim
+        self.intermediate_dim = intermediate_dim
         self.attention_dim = attention_dim
         self.num_heads = num_heads
         self.num_blocks = num_blocks
+        self.num_mlp_layers = num_mlp_layers
         self.num_det = num_det
         
         emb_key, atten_key, proj_key = jax.random.split(key, 3)
@@ -128,6 +144,8 @@ class PsiSolid(eqx.Module):
                 self.hidden_dim,
                 self.attention_dim,
                 self.num_heads,
+                self.num_mlp_layers,
+                self.intermediate_dim,
                 self.activation,
                 key=subkey
             ) for subkey in attention_block_keys
@@ -139,20 +157,14 @@ class PsiSolid(eqx.Module):
             self.num_det,
             key=proj_key
         )
-    
+        
     def __call__(
         self, x: Float[Array, "n_particle dim"]
     ) -> Complex[Array, ""]:
         z = jax.vmap(self.periodic_embedding)(x)         # shape=(n_particle, hidden_dim)
-        
-        for attention_block in self.attention_blocks:
+        for attention_block in self .attention_blocks:
             z = attention_block(z)                       # shape=(n_particle, hidden_dim)
-            
         single_wave_fns = jax.vmap(self.projector)(z)    # shape=(n_particle, n_det, n_particle)
         single_wave_fns = jnp.permute_dims(single_wave_fns, (1, 0, 2)) # shape=(n_det, n_particle, n_particle)
         multi_wave_fns = jnp.linalg.det(single_wave_fns) # shape=(n_det, )
         return jnp.sum(multi_wave_fns)
-        
-    @property
-    def recip_latt_vecs(self):
-        return jnp.array(self.periodic_embedding.recip_latt_vecs)

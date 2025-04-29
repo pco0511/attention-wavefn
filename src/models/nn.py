@@ -13,10 +13,11 @@ def _identity(x):
     return x
 
 def _default_floating_dtype():
-    if jax.config.jax_enable_x64:
+    if jax.config.read("jax_enable_x64"):
         return jnp.float64
     else:
         return jnp.float32
+
 
 def _is_array(element: Any) -> bool:
     """Returns `True` if `element` is a JAX array or NumPy array."""
@@ -129,10 +130,7 @@ class ResidualMLP(eqx.Module, strict=True):
     
 class PeriodicEmbedding(eqx.Module):
     linear: eqx.nn.Linear
-    recip_latt_vecs: tuple[tuple[float, ...], ...] = eqx.field(static=True)
-    num_recip_vecs: int = eqx.field(static=True)
-    space_dim: int = eqx.field(static=True)
-    embedding_dim: int = eqx.field(static=True)
+    rlv_arr: Array
     
     def __init__(
         self,
@@ -141,23 +139,19 @@ class PeriodicEmbedding(eqx.Module):
         *,
         key: PRNGKeyArray,
     ):
-        arr = np.asarray(recip_latt_vecs)
-        self.recip_latt_vecs = tuple(map(tuple, arr.tolist()))
-        self.num_recip_vecs = recip_latt_vecs.shape[0]
-        self.space_dim = recip_latt_vecs.shape[1]
-        self.embedding_dim = embedding_dim
+        self.rlv_arr = jnp.asarray(recip_latt_vecs)
+        num_recip_vecs = recip_latt_vecs.shape[0]
         self.linear = eqx.nn.Linear(
-            2 * self.num_recip_vecs,
-            self.embedding_dim,
+            2 * num_recip_vecs,
+            embedding_dim,
             use_bias=False,
             key=key
         )
     
     def __call__(
-        self, x: Float[Array, "dim"]
+        self, x: Float[Array, "dim"], 
     ) -> Float[Array, "e_dim"]:
-        rlv_arr = jnp.array(self.recip_latt_vecs)
-        phi = jnp.einsum("j,ij->i", x, rlv_arr)
+        phi = jnp.einsum("j,ij->i", x, jax.lax.stop_gradient(self.rlv_arr))
         sines = jnp.sin(phi)
         cosines = jnp.cos(phi)
         embedded = self.linear(jnp.concat([sines, cosines]))
