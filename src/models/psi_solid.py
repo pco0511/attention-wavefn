@@ -4,6 +4,8 @@ import equinox as eqx
 import jax 
 import jax.numpy as jnp
 from jaxtyping import Float, Complex, Array, PRNGKeyArray
+from netket.jax import logdet_cmplx
+from jax.scipy.special import logsumexp
 
 from .nn import PeriodicEmbedding, ResidualMLP
 
@@ -166,5 +168,8 @@ class PsiSolid(eqx.Module):
             z = attention_block(z)                       # shape=(n_particle, hidden_dim)
         single_wave_fns = jax.vmap(self.projector)(z)    # shape=(n_particle, n_det, n_particle)
         single_wave_fns = jnp.permute_dims(single_wave_fns, (1, 0, 2)) # shape=(n_det, n_particle, n_particle)
-        multi_wave_fns = jnp.linalg.det(single_wave_fns) # shape=(n_det, )
-        return jnp.sum(multi_wave_fns)
+        
+        logdets = jax.vmap(logdet_cmplx)(single_wave_fns)
+        log_psi = logsumexp(logdets)
+        
+        return log_psi

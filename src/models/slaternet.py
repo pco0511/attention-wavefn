@@ -4,6 +4,7 @@ import equinox as eqx
 import jax 
 import jax.numpy as jnp
 from jaxtyping import Float, Complex, Array, PRNGKeyArray
+from netket.jax import logdet_cmplx
 
 from .nn import PeriodicEmbedding, ResidualMLP
 
@@ -58,8 +59,4 @@ class SlaterNet(eqx.Module):
         mlp_outs = jax.vmap(self.mlp)(embedded)         # shape=(n_particle, 2 * n_particle)
         real, imag = jnp.split(mlp_outs, 2, axis=1)
         single_wave_fns = jax.lax.complex(real, imag)   # shape=(n_particle, n_particle), dtype=complex
-        return jnp.linalg.det(single_wave_fns)
-        
-    @property
-    def recip_latt_vecs(self):
-        return jnp.array(self.periodic_embedding.recip_latt_vecs)
+        return logdet_cmplx(single_wave_fns)

@@ -40,17 +40,7 @@ def coulomb_repulsive(
     return 1 / (jnp.linalg.norm(x - y) + epsilon)
 
 
-def laplacian_hessian_trace(fn, x: Float[Array, "n_par 2"]) -> Float[Array, ""]:
-    original_shape = x.shape
-    x_flat = x.flatten()
-
-    def wrapped_fn_flat(x_flat_arg):
-        return fn(x_flat_arg.reshape(original_shape))
-
-    H = jax.hessian(wrapped_fn_flat)(x_flat)
-    return jnp.trace(H)
-
-def complex_laplacian(fn, x: Float[Array, "n_par 2"]) -> Float[Array, ""]:
+def complex_laplacian(fn, x: Float[Array, "n_par 2"]) -> Complex[Array, ""]:
     original_shape = x.shape
     x_flat = x.flatten()
     d = x_flat.size
@@ -65,43 +55,58 @@ def complex_laplacian(fn, x: Float[Array, "n_par 2"]) -> Float[Array, ""]:
     
     diag_elements = jax.vmap(get_diag_hessian_element)(jnp.arange(d))
     return jnp.sum(diag_elements)
+
+# def kinetic(
+#     log_psi_fn: eqx.Module,
+#     point: Float[Array, "n_par 2"]
+# ):
+#     original_shape = point.shape
+#     point_flat = point.flatten()
     
-
-def laplacian_vmap_grad(fn, x: Float[Array, "n_par 2"]) -> Float[Array, ""]:
-    original_shape = x.shape
-    x_flat = x.flatten()
-    d = x_flat.size
-
-    def wrapped_fn_flat(x_flat_arg):
-        return fn(x_flat_arg.reshape(original_shape))
-
-    grad_fn = jax.grad(wrapped_fn_flat)
-
-    def get_diag_hessian_element(i):
-        return jax.grad(lambda y: grad_fn(y)[i])(x_flat)[i]
+#     def theta_flat(x_flat):
+#         return log_psi_fn(x_flat.reshape(original_shape))
     
-    diag_elements = jax.vmap(get_diag_hessian_element)(jnp.arange(d))
-    return jnp.sum(diag_elements)
+#     grad_theta_flat = nk.jax.grad(theta_flat)(point_flat)
+#     grad_sq = jnp.vdot(grad_theta_flat, grad_theta_flat)
+#     lapl_theta = complex_laplacian(log_psi_fn, point)
+#     t = (-0.5) * (lapl_theta + grad_sq)
+    
+#     return t
 
-def wfn_laplacian(
-    wavefn: eqx.Module,
+def kinetic(
+    log_psi_fn: eqx.Module,
     point: Float[Array, "n_par 2"]
 ) -> Float[Array, ""]:
+    point_flat = point.reshape(-1)
+
+    def theta(x_flat):
+        return log_psi_fn(x_flat.reshape(point.shape))
+
+    grad_theta  = nk.jax.grad(theta)
+    g_flat      = grad_theta(point_flat)
+    grad_sq     = jnp.vdot(g_flat, g_flat)
     
-    lap_re = laplacian_hessian_trace(lambda r: jnp.real(wavefn(r)), point)
-    lap_im = laplacian_hessian_trace(lambda r: jnp.imag(wavefn(r)), point)
-    
-    return jax.lax.complex(lap_re, lap_im)
+    def hvp_diag(i, acc):
+        e_i = jnp.zeros_like(point_flat).at[i].set(1.0)
+        _, tang = jax.jvp(grad_theta, (point_flat,), (e_i,))
+        return acc + tang[i]
+
+    lapl_theta = jax.lax.fori_loop(
+        0, point_flat.size, hvp_diag, 0.0
+    )
+
+    return -0.5 * (lapl_theta + grad_sq)
+
 
 def local_energy(
-    wavefn: eqx.Module,
+    log_psi_fn: eqx.Module,
     point: Float[Array, "n_par 2"],
     V_0: float,
     a_M: float,
     phi: float,
     epsilon: float = 1e-6
 ) -> Float[Array, ""]:
-    t = (-1/2) * (complex_laplacian(wavefn, point) / wavefn(point))
+    t = kinetic(log_psi_fn, point)
     
     potentials = jax.vmap(moire_potential, (0, None, None, None))(point, V_0, a_M, phi)
     v = jnp.sum(potentials)
@@ -117,3 +122,43 @@ def local_energy(
     
     E_loc = t + v + u
     return E_loc
+
+
+
+
+
+# def laplacian_hessian_trace(fn, x: Float[Array, "n_par 2"]) -> Float[Array, ""]:
+#     original_shape = x.shape
+#     x_flat = x.flatten()
+
+#     def wrapped_fn_flat(x_flat_arg):
+#         return fn(x_flat_arg.reshape(original_shape))
+
+#     H = jax.hessian(wrapped_fn_flat)(x_flat)
+#     return jnp.trace(H)
+    
+# def laplacian_vmap_grad(fn, x: Float[Array, "n_par 2"]) -> Float[Array, ""]:
+#     original_shape = x.shape
+#     x_flat = x.flatten()
+#     d = x_flat.size
+
+#     def wrapped_fn_flat(x_flat_arg):
+#         return fn(x_flat_arg.reshape(original_shape))
+
+#     grad_fn = jax.grad(wrapped_fn_flat)
+
+#     def get_diag_hessian_element(i):
+#         return jax.grad(lambda y: grad_fn(y)[i])(x_flat)[i]
+    
+#     diag_elements = jax.vmap(get_diag_hessian_element)(jnp.arange(d))
+#     return jnp.sum(diag_elements)
+
+# def wfn_laplacian(
+#     wavefn: eqx.Module,
+#     point: Float[Array, "n_par 2"]
+# ) -> Float[Array, ""]:
+    
+#     lap_re = laplacian_hessian_trace(lambda r: jnp.real(wavefn(r)), point)
+#     lap_im = laplacian_hessian_trace(lambda r: jnp.imag(wavefn(r)), point)
+    
+#     return jax.lax.complex(lap_re, lap_im)
