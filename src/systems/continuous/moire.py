@@ -84,7 +84,7 @@ def kinetic(
 
     grad_theta  = nk.jax.grad(theta)
     g_flat      = grad_theta(point_flat)
-    grad_sq     = jnp.vdot(g_flat, g_flat)
+    grad_sq     = jnp.dot(g_flat, g_flat)
     
     def hvp_diag(i, acc):
         e_i = jnp.zeros_like(point_flat).at[i].set(1.0)
