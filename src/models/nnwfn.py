@@ -236,7 +236,7 @@ class AWFN(eqx.Module):
         key: PRNGKeyArray
     ):
         embedder_key, attention_key, pre_hf_key, hf_key = jax.random.split(key, 4)
-        self.embedder = DiscreteEmbedderBlock(
+        self.embedder_block = DiscreteEmbedderBlock(
             local_dof,
             embedding_dim,
             key=embedder_key
@@ -278,7 +278,7 @@ class AWFN(eqx.Module):
         self,
         indexseq: Float[Array, "n_par"]
     ) -> Complex[Array, ""]:
-        embedded = self.embedder(indexseq)
+        embedded = self.embedder_block(indexseq)
         for layer in self.layers:
             embedded = layer(embedded)
         embedded = self.pre_hf_atten_block(embedded)
@@ -307,7 +307,7 @@ class AWFNContinuous(eqx.Module):
         key: PRNGKeyArray
     ):
         embedder_key, attention_key, pre_hf_key, hf_key = jax.random.split(key, 4)
-        self.embedder = PeriodicEmbedderBlock(
+        self.embedder_block = PeriodicEmbedderBlock(
             recip_latt_vecs,
             embedding_dim,
             key=embedder_key
@@ -349,7 +349,7 @@ class AWFNContinuous(eqx.Module):
         self,
         indexseq: Float[Array, "n_par"]
     ) -> Complex[Array, ""]:
-        embedded = self.embedder(indexseq)
+        embedded = self.embedder_block(indexseq)
         for layer in self.layers:
             embedded = layer(embedded)
         embedded = self.pre_hf_atten_block(embedded)
