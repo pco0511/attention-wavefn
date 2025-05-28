@@ -18,7 +18,6 @@ def _default_floating_dtype():
     else:
         return jnp.float32
 
-
 def _is_array(element: Any) -> bool:
     """Returns `True` if `element` is a JAX array or NumPy array."""
     return isinstance(element, (np.ndarray, np.generic, jax.Array))
