@@ -1,0 +1,5 @@
+jax[cuda12]
+netket
+matplotlib
+ipykernel
+jupyter
